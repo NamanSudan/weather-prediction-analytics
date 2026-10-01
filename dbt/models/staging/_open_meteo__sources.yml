@@ -1,0 +1,42 @@
+version: 2
+
+sources:
+  - name: open_meteo
+    description: Open-Meteo data landed as-is by the Airflow `weather_etl` DAG (role LOADER).
+    database: WEATHER_DB
+    schema: RAW
+    config:
+      loaded_at_field: loaded_at
+      freshness:
+        warn_after: {count: 26, period: hour}
+        error_after: {count: 50, period: hour}
+    tables:
+      - name: locations
+        description: Cities tracked by the pipeline (Airflow Variable `weather_locations`).
+        config:
+          freshness: null
+        columns:
+          - name: location_id
+            data_tests: [unique, not_null]
+      - name: weather_observed_daily
+        description: Historical Weather API (ERA5 reanalysis) daily actuals, 1991 to yesterday.
+        columns:
+          - name: location_id
+            data_tests:
+              - not_null
+              - relationships: {arguments: {to: "source('open_meteo', 'locations')", field: location_id}}
+          - name: observed_date
+            data_tests: [not_null]
+        data_tests:
+          - dbt_utils.unique_combination_of_columns:
+              arguments: {combination_of_columns: [location_id, observed_date]}
+      - name: weather_forecast_daily
+        description: Forecast API (NWP) daily forecasts; one vintage per forecast_issued_date.
+        columns:
+          - name: model
+            data_tests:
+              - not_null
+              - accepted_values: {arguments: {values: [best_match, ecmwf_ifs025, gfs_seamless]}}
+        data_tests:
+          - dbt_utils.unique_combination_of_columns:
+              arguments: {combination_of_columns: [location_id, model, forecast_issued_date, target_date]}

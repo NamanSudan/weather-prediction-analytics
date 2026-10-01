@@ -1,0 +1,53 @@
+# Pull-request gates. Nothing here touches Snowflake: no secrets are stored in GitHub, and
+# applies stay with the account owner.
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv venv --python 3.11 .venv && uv pip install --python .venv/bin/python -r requirements.txt
+      - name: ruff
+        run: .venv/bin/ruff check dags config scripts tests docker/superset && .venv/bin/ruff format --check dags config scripts tests docker/superset
+      - name: unit tests
+        run: .venv/bin/python -m pytest -q tests/test_open_meteo.py
+      - name: dbt parse (compiles every model, test and snapshot without a warehouse)
+        working-directory: dbt
+        env:
+          DBT_PROFILES_DIR: .
+          SNOWFLAKE_ACCOUNT: ci-placeholder
+          DBT_PRIVATE_KEY_PATH: /dev/null
+          SNOWFLAKE_DBT_KEY_PASSPHRASE: ci-placeholder
+        run: ../.venv/bin/dbt deps && ../.venv/bin/dbt parse
+
+  airflow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: build the Airflow image
+        run: docker build -t lab1-weather/airflow:3.3.2 docker/airflow
+      - name: DAG integrity tests
+        run: |
+          docker run --rm -v "$PWD/dags:/opt/airflow/dags" -v "$PWD/dbt:/opt/airflow/dbt" -v "$PWD/tests:/opt/airflow/tests" \
+            -e DBT_PROJECT_DIR=/opt/airflow/dbt lab1-weather/airflow:3.3.2 \
+            bash -c "airflow db migrate >/dev/null && python -m pytest -q -p no:cacheprovider /opt/airflow/tests/test_dag_integrity.py"
+
+  infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: terraform fmt + validate
+        working-directory: infra/snowflake/terraform
+        run: terraform fmt -check -recursive && terraform init -backend=false && terraform validate
+      - name: policy unit tests (OPA)
+        run: docker run --rm -v "$PWD/infra/policies:/p" -w /p openpolicyagent/opa:1.10.1 test -v .

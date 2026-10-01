@@ -1,0 +1,5 @@
+# Airflow runtime deps (versions of Airflow-managed packages come from the constraints file)
+apache-airflow-providers-snowflake
+astronomer-cosmos==1.15.1
+requests
+pytest  # DAG integrity tests (make test-dags)

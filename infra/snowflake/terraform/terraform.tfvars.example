@@ -1,0 +1,17 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+# The key passphrase is NOT set here: export TF_VAR_terraform_private_key_passphrase (the Makefile loads it from .env).
+
+snowflake_organization_name = "MYORG"     # SELECT CURRENT_ORGANIZATION_NAME();
+snowflake_account_name      = "MYACCOUNT" # SELECT CURRENT_ACCOUNT_NAME();
+
+# Account owner(s) who already exist and just need the LAB_DEVELOPER role
+existing_developer_users = ["MY_EXISTING_USER"]
+
+# Teammates to create (one-time password, changed at first login)
+developers = {
+  JDOE = {
+    first_name = "Jane"
+    last_name  = "Doe"
+    email      = "jane.doe@example.edu"
+  }
+}

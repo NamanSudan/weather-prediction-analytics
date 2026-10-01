@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: ml_outputs
+    description: Tables written by ml_temp_max_forecast's post-hooks (not dbt models themselves).
+    database: WEATHER_DB
+    schema: "{{ 'ML' if target.name == 'prod' else target.schema }}"
+    tables:
+      - name: ml_temp_max_eval_metrics
+        description: SNOWFLAKE.ML.FORECAST cross-validation metrics (SHOW_EVALUATION_METRICS).

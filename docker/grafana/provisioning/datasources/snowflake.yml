@@ -1,0 +1,20 @@
+# Grafana datasource as code. Read-only SVC_BI (role REPORTER) with key-pair auth; the key is read
+# from a mounted file, never stored in this repo.
+apiVersion: 1
+datasources:
+  - name: Snowflake WEATHER_DB
+    uid: snowflake-weather
+    type: michelin-snowflake-datasource
+    access: proxy
+    isDefault: true
+    editable: false
+    jsonData:
+      account: ${SNOWFLAKE_ACCOUNT}
+      username: SVC_BI
+      authMethod: keyPair
+      role: REPORTER
+      warehouse: WEATHER_WH
+      database: WEATHER_DB
+      schema: ANALYTICS
+    secureJsonData:
+      privateKey: $__file{/run/secrets/svc_bi/rsa_key.grafana}

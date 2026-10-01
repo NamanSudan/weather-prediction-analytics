@@ -1,0 +1,49 @@
+name: weather_analytics
+version: "1.0.0"
+config-version: 2
+profile: weather_analytics
+
+model-paths: ["models"]
+test-paths: ["tests"]
+snapshot-paths: ["snapshots"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  normals_start_year: 1991          # WMO climate normal period
+  normals_end_year: 2020
+  wet_day_mm: 1.0                   # WMO wet-day threshold for dry spells / rain days
+  ml_training_years: 10             # history fed to SNOWFLAKE.ML.FORECAST
+  forecast_horizon_days: 7
+  backtest_days: 365                # window for baseline skill scores
+
+models:
+  weather_analytics:
+    +persist_docs: {relation: true, columns: true}
+    staging:
+      +schema: STAGING
+      +materialized: view
+    intermediate:
+      +schema: STAGING
+      +materialized: view
+    ml:
+      +schema: ML
+      +materialized: table
+    marts:
+      +schema: ANALYTICS
+      +materialized: table
+
+snapshots:
+  weather_analytics:
+    +schema: SNAPSHOTS
+
+data_tests:
+  weather_analytics:
+    +severity: error
+
+seeds:
+  weather_analytics:
+    +schema: ANALYTICS
+    wmo_weather_codes:
+      +column_types: {weather_code: int, description: varchar, category: varchar}

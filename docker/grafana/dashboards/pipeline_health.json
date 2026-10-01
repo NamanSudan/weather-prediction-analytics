@@ -1,0 +1,525 @@
+{
+  "uid": "weather-pipeline-health",
+  "title": "Weather Lab: Pipeline & Data Health",
+  "tags": [
+    "lab1",
+    "ops",
+    "snowflake"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "refresh": "15m",
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Hours since last ETL load",
+      "description": "Worst freshness across the RAW tables. SLA: loaded within 26 h (daily DAG).",
+      "datasource": {
+        "type": "michelin-snowflake-datasource",
+        "uid": "snowflake-weather"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "michelin-snowflake-datasource",
+            "uid": "snowflake-weather"
+          },
+          "queryText": "select max(hours_since_load) as hours from fct_pipeline_health where table_name <> 'RAW.LOCATIONS'",
+          "queryType": "table",
+          "timeColumns": [
+            "time"
+          ],
+          "fillMode": "null"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 26
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Actuals lag (days behind today)",
+      "description": "ERA5 trails real time by ~2-5 days; provisional days fill the gap.",
+      "datasource": {
+        "type": "michelin-snowflake-datasource",
+        "uid": "snowflake-weather"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "michelin-snowflake-datasource",
+            "uid": "snowflake-weather"
+          },
+          "queryText": "select datediff(day, max(observed_date), current_date()) as lag_days from fct_weather_daily",
+          "queryType": "table",
+          "timeColumns": [
+            "time"
+          ],
+          "fillMode": "null"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 3
+              },
+              {
+                "color": "red",
+                "value": 7
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Days of history per city",
+      "description": "Daily actuals since 1991-01-01 (ERA5).",
+      "datasource": {
+        "type": "michelin-snowflake-datasource",
+        "uid": "snowflake-weather"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "michelin-snowflake-datasource",
+            "uid": "snowflake-weather"
+          },
+          "queryText": "select count(distinct observed_date) as days from fct_weather_daily",
+          "queryType": "table",
+          "timeColumns": [
+            "time"
+          ],
+          "fillMode": "null"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Forecast vintages archived",
+      "description": "One NWP vintage is archived per ETL run; enables forecast verification over time.",
+      "datasource": {
+        "type": "michelin-snowflake-datasource",
+        "uid": "snowflake-weather"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "michelin-snowflake-datasource",
+            "uid": "snowflake-weather"
+          },
+          "queryText": "select max(forecast_vintages) as vintages from fct_pipeline_health",
+          "queryType": "table",
+          "timeColumns": [
+            "time"
+          ],
+          "fillMode": "null"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Pipeline freshness by RAW table",
+      "datasource": {
+        "type": "michelin-snowflake-datasource",
+        "uid": "snowflake-weather"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "michelin-snowflake-datasource",
+            "uid": "snowflake-weather"
+          },
+          "queryText": "select table_name, source, row_count, locations, latest_data_date, last_loaded_at_utc, hours_since_load, freshness_status from fct_pipeline_health order by table_name",
+          "queryType": "table",
+          "timeColumns": [
+            "time"
+          ],
+          "fillMode": "null"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "FRESHNESS_STATUS"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "fresh": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "stale": {
+                        "color": "red",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Daily high vs 1991-2020 normal (\u00b0C)",
+      "datasource": {
+        "type": "michelin-snowflake-datasource",
+        "uid": "snowflake-weather"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 16,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "michelin-snowflake-datasource",
+            "uid": "snowflake-weather"
+          },
+          "queryText": "select observed_date::timestamp_ntz as time,\n  max(iff(location_id = 'SFO', temp_max_c, null))        as \"San Francisco high\",\n  max(iff(location_id = 'SFO', normal_temp_max_c, null)) as \"San Francisco normal\",\n  max(iff(location_id = 'NYC', temp_max_c, null))        as \"New York high\",\n  max(iff(location_id = 'NYC', normal_temp_max_c, null)) as \"New York normal\"\nfrom fct_weather_daily\nwhere $__timeFilter(observed_date)\ngroup by 1 order by 1",
+          "queryType": "time series",
+          "timeColumns": [
+            "time"
+          ],
+          "fillMode": "null"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "custom": {
+            "lineWidth": 2,
+            "spanNulls": true,
+            "showPoints": "never"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*normal"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "bargauge",
+      "title": "Forecast MAE by method (\u00b0C, avg leads 1-7, n \u2265 20)",
+      "datasource": {
+        "type": "michelin-snowflake-datasource",
+        "uid": "snowflake-weather"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 12,
+        "w": 8,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "michelin-snowflake-datasource",
+            "uid": "snowflake-weather"
+          },
+          "queryText": "select location_id || ' \u00b7 ' || method as series, round(avg(mae_c), 2) as mae from fct_forecast_skill where coalesce(n_forecasts, 999) >= 20 group by 1 order by 2",
+          "queryType": "table",
+          "timeColumns": [
+            "time"
+          ],
+          "fillMode": "null"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [],
+          "fields": "",
+          "values": true
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "min": 0,
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 2.5
+              },
+              {
+                "color": "red",
+                "value": 3.5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "description": "Baselines: 1-year walk-forward backtest. Snowflake ML: 10 rolling 7-day folds. NWP models appear once 20+ archived forecasts have verified."
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "30-day rainfall (mm)",
+      "datasource": {
+        "type": "michelin-snowflake-datasource",
+        "uid": "snowflake-weather"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "michelin-snowflake-datasource",
+            "uid": "snowflake-weather"
+          },
+          "queryText": "select observed_date::timestamp_ntz as time,\n  max(iff(location_id = 'SFO', precip_30d_mm, null)) as \"San Francisco\",\n  max(iff(location_id = 'NYC', precip_30d_mm, null)) as \"New York\"\nfrom fct_weather_daily where $__timeFilter(observed_date) group by 1 order by 1",
+          "queryType": "time series",
+          "timeColumns": [
+            "time"
+          ],
+          "fillMode": "null"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "lengthmm",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      }
+    }
+  ],
+  "description": "Operations view: freshness SLAs, volumes and model accuracy for the Open-Meteo -> Airflow -> Snowflake -> dbt pipeline."
+}

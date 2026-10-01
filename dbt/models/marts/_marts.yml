@@ -1,0 +1,78 @@
+version: 2
+
+models:
+  - name: dim_location
+    description: Cities tracked by the pipeline.
+    columns:
+      - name: location_id
+        description: Short city code (SFO, NYC).
+        data_tests: [unique, not_null]
+
+  - name: fct_weather_daily
+    description: >
+      One row per city per day since 1991 with actuals and derived metrics: 7/30-day moving averages,
+      anomaly vs the 1991-2020 normal, 7/30-day rolling rainfall and current dry-spell length.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments: {combination_of_columns: [location_id, observed_date]}
+    columns:
+      - name: location_id
+        data_tests:
+          - not_null
+          - relationships: {arguments: {to: "ref('dim_location')", field: location_id}}
+      - name: observed_date
+        data_tests: [not_null]
+      - name: temp_max_c
+        description: Daily maximum 2 m temperature (deg C).
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range: {arguments: {min_value: -50, max_value: 55}}
+      - name: temp_anomaly_c
+        description: temp_mean_c minus the smoothed 1991-2020 normal for that day of year.
+        data_tests: [not_null]
+      - name: dry_spell_days
+        description: Consecutive days with precipitation < wet_day_mm, ending on this day (0 on wet days).
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range: {arguments: {min_value: 0}}
+      - name: precip_30d_mm
+        description: Trailing 30-day precipitation total (mm).
+        data_tests:
+          - dbt_utils.accepted_range: {arguments: {min_value: 0}}
+
+  - name: fct_forecast_backtest
+    description: Walk-forward backtest of baseline methods and verification of archived NWP vintages.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments: {combination_of_columns: [location_id, method, issued_date, lead_days]}
+    columns:
+      - name: method
+        data_tests:
+          - accepted_values:
+              arguments: {values: [persistence, moving_avg_7d, climatology, nwp_best_match, nwp_ecmwf_ifs025, nwp_gfs_seamless]}
+
+  - name: fct_forecast_skill
+    description: MAE / RMSE / bias / skill-vs-persistence per city, method and lead time.
+    columns:
+      - name: mae_c
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range: {arguments: {min_value: 0}}
+
+  - name: fct_temperature_outlook
+    description: Next-days daily-high predictions per city from every method, next to the climate normal.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments: {combination_of_columns: [location_id, method, target_date]}
+    columns:
+      - name: predicted_temp_max_c
+        data_tests: [not_null]
+
+  - name: fct_pipeline_health
+    description: Freshness and volume of every RAW table, for the Grafana operations dashboard.
+    columns:
+      - name: table_name
+        data_tests: [unique, not_null]
+      - name: row_count
+        data_tests:
+          - dbt_utils.accepted_range: {arguments: {min_value: 1}}

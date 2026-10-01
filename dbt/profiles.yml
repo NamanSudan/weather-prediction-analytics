@@ -1,0 +1,31 @@
+# Credentials come only from env vars. In Airflow, Cosmos builds this profile from the
+# `snowflake_dbt` connection instead.
+#   prod: SVC_DBT (TRANSFORMER) builds the shared schemas
+#   dev : a collaborator builds into their own DEV_<USER> sandbox on DEV_WH
+weather_analytics:
+  target: "{{ env_var('DBT_TARGET', 'prod') }}"
+  outputs:
+    prod:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: SVC_DBT
+      role: TRANSFORMER
+      authenticator: snowflake_jwt
+      private_key_path: "{{ env_var('DBT_PRIVATE_KEY_PATH') }}"
+      private_key_passphrase: "{{ env_var('SNOWFLAKE_DBT_KEY_PASSPHRASE') }}"
+      database: WEATHER_DB
+      warehouse: WEATHER_WH
+      schema: ANALYTICS
+      threads: 4
+      query_tag: dbt_weather_analytics
+    dev:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      role: LAB_DEVELOPER
+      authenticator: externalbrowser
+      database: WEATHER_DB
+      warehouse: DEV_WH
+      schema: "DEV_{{ env_var('SNOWFLAKE_USER') | upper }}"
+      threads: 4
+      query_tag: dbt_weather_analytics_dev

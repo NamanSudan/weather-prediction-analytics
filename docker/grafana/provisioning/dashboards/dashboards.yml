@@ -1,0 +1,10 @@
+apiVersion: 1
+providers:
+  - name: weather-lab
+    folder: Weather Lab
+    type: file
+    allowUiUpdates: false
+    disableDeletion: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

@@ -1,0 +1,3 @@
+location_id,city,state,latitude,longitude,timezone,loaded_at
+NYC,New York,NY,40.7128,-74.006,America/New_York,2026-09-30 13:00:16.885000
+SFO,San Francisco,CA,37.7749,-122.4194,America/Los_Angeles,2026-09-30 13:00:16.885000

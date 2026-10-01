@@ -1,0 +1,226 @@
+# Weather lab stack: Airflow 3.3 (LocalExecutor) + Superset + Grafana.
+# Run from the repo root via `make up` (uses --env-file .env). Separate project name and ports
+# from the course's docker-compose (Airflow 2.10 on :8081), so both can coexist.
+#
+# Secrets: only values from .env (gitignored) and read-only key mounts. Each container gets
+# only the keys it needs; the Terraform key is never mounted anywhere.
+
+x-airflow-common: &airflow-common
+  image: lab1-weather/airflow:3.3.2
+  build:
+    context: ./airflow
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${POSTGRES_PASSWORD}@postgres/airflow
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET}
+    AIRFLOW__API_AUTH__JWT_ISSUER: lab1-weather
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+    AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL: "30"
+    DBT_PROJECT_DIR: /opt/airflow/dbt
+  volumes:
+    - ../dags:/opt/airflow/dags
+    - ../dbt:/opt/airflow/dbt
+    - ../logs:/opt/airflow/logs
+    - ../secrets/snowflake/svc_etl:/opt/airflow/secrets/svc_etl:ro
+    - ../secrets/snowflake/svc_dbt:/opt/airflow/secrets/svc_dbt:ro
+  user: "${AIRFLOW_UID}:0"
+  depends_on: &airflow-common-depends-on
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        set -euo pipefail
+        mkdir -p /opt/airflow/logs
+        chown -R "${AIRFLOW_UID}:0" /opt/airflow/logs
+        /entrypoint airflow version
+        # Connections + variables as code (templates in config/airflow/)
+        /entrypoint python /opt/airflow/lab_config/bootstrap_airflow.py
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
+      # only the init container sees these; they end up Fernet-encrypted in the metadata DB
+      SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT}
+      SNOWFLAKE_DATABASE: ${SNOWFLAKE_DATABASE}
+      SNOWFLAKE_WAREHOUSE: ${SNOWFLAKE_WAREHOUSE}
+      SNOWFLAKE_ETL_KEY_PASSPHRASE: ${SNOWFLAKE_ETL_KEY_PASSPHRASE}
+      SNOWFLAKE_DBT_KEY_PASSPHRASE: ${SNOWFLAKE_DBT_KEY_PASSPHRASE}
+    volumes:
+      - ../logs:/opt/airflow/logs
+      - ../config/airflow:/opt/airflow/lab_config:ro
+    user: "0:0"
+
+  airflow-apiserver:
+    <<: *airflow-common
+    command: api-server
+    ports:
+      - "${AIRFLOW_PORT}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8974/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: dag-processor
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-triggerer:
+    <<: *airflow-common
+    command: triggerer
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # ---------------- Superset (graded BI tool) ----------------
+  superset-init:
+    image: lab1-weather/superset:6.1.0
+    build:
+      context: ./superset
+    entrypoint: /bin/bash
+    command: /app/docker-bootstrap/bootstrap.sh
+    environment: &superset-env
+      SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SUPERSET_ADMIN_USER: ${SUPERSET_ADMIN_USER}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+    volumes: &superset-volumes
+      - ./superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+      - ./superset/bootstrap.sh:/app/docker-bootstrap/bootstrap.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  superset:
+    image: lab1-weather/superset:6.1.0
+    environment: *superset-env
+    volumes: *superset-volumes
+    ports:
+      - "${SUPERSET_PORT}:8088"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8088/health"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+
+  # Dashboards as code: database, datasets, charts and dashboard defined in provision_superset.py
+  superset-provision:
+    image: lab1-weather/superset:6.1.0
+    entrypoint: ["/app/.venv/bin/python", "/app/provisioning/provision_superset.py"]
+    environment:
+      SUPERSET_URL: http://superset:8088
+      SUPERSET_ADMIN_USER: ${SUPERSET_ADMIN_USER}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+      SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT}
+      SNOWFLAKE_BI_KEY_PATH: /run/secrets/svc_bi/rsa_key.p8
+    volumes:
+      - ./superset/provision_superset.py:/app/provisioning/provision_superset.py:ro
+      - ../secrets/snowflake/svc_bi:/run/secrets/svc_bi:ro
+    depends_on:
+      superset:
+        condition: service_healthy
+
+  # ---------------- Grafana (operations view; complements the graded Superset dashboard) ----------------
+  grafana:
+    image: grafana/grafana-oss:13.0.2
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_PLUGINS_PREINSTALL_SYNC: michelin-snowflake-datasource@2.1.0@https://github.com/michelin/snowflake-grafana-datasource/releases/download/v2.1.0/snowflake-grafana-datasource.zip
+      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: michelin-snowflake-datasource
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/pipeline_health.json
+      SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ../secrets/snowflake/svc_bi:/run/secrets/svc_bi:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres-db:
+  grafana-data:

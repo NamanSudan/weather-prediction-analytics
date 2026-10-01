@@ -1,0 +1,17 @@
+# Local dev tooling for Lab 1 (host machine). Airflow itself runs in Docker.
+# Lock with: uv pip compile requirements.in -o requirements.txt
+dbt-core~=1.12.0
+dbt-snowflake~=1.12.0
+snowflake-connector-python[secure-local-storage]
+cryptography
+requests
+pandas
+python-dotenv
+# quality gates
+pre-commit
+ruff
+sqlfluff
+sqlfluff-templater-dbt
+yamllint
+pytest
+pypdf

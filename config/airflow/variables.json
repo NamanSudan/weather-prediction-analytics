@@ -1,0 +1,16 @@
+{
+  "weather_locations": [
+    {"location_id": "SFO", "city": "San Francisco", "state": "CA", "latitude": 37.7749, "longitude": -122.4194, "timezone": "America/Los_Angeles"},
+    {"location_id": "NYC", "city": "New York", "state": "NY", "latitude": 40.7128, "longitude": -74.0060, "timezone": "America/New_York"}
+  ],
+  "weather_forecast_models": ["best_match", "ecmwf_ifs025", "gfs_seamless"],
+  "weather_forecast_days": 16,
+  "weather_past_days": 14,
+  "weather_history_start_date": "1991-01-01",
+  "weather_history_refresh_days": 30,
+  "weather_daily_variables": [
+    "weather_code", "temperature_2m_max", "temperature_2m_min", "temperature_2m_mean",
+    "precipitation_sum", "rain_sum", "snowfall_sum", "precipitation_hours",
+    "wind_speed_10m_max", "wind_gusts_10m_max", "shortwave_radiation_sum", "et0_fao_evapotranspiration"
+  ]
+}

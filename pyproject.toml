@@ -1,0 +1,14 @@
+[tool.ruff]
+line-length = 130
+target-version = "py311"
+src = ["dags"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["common"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["dags"]

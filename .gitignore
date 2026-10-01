@@ -1,0 +1,52 @@
+# secrets & local env
+.env
+secrets/*
+!secrets/.gitkeep
+*.p8
+*.pem
+passphrase*.txt
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan*
+terraform.tfvars
+crash.log
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+dbt/.user.yml
+
+# airflow / docker runtime
+logs/
+docker/**/data/
+
+# dataset extracts (samples in data/sample are committed)
+data/raw/*
+!data/raw/.gitkeep
+
+# latex build
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.fls
+report/*.fdb_latexmk
+report/*.synctex.gz
+
+.DS_Store
+infra/snowflake/bootstrap/*.rendered.sql
+report/main.pdf
+report/build.log
+screenshots/dbt_logs/
